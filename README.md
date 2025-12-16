@@ -29,7 +29,7 @@ User → Amazon Lex → Lambda Function → S3 (FAQ) + Bedrock Claude 3 → Resp
 ### 1. Deploy Everything
 ```bash
 # Windows PowerShell
-.\deploy.ps1 -StackName "my-faq-bot" -Region "us-east-1"
+.\deploy.ps1 -StackName "my-faq-bot" -Region "eu-west-1"
 
 # Linux/Mac Bash
 ./deploy.sh my-faq-bot us-east-1
@@ -62,6 +62,43 @@ User → Amazon Lex → Lambda Function → S3 (FAQ) + Bedrock Claude 3 → Resp
 ./test.sh my-faq-bot us-east-1 "What are your contact details?"
 ./test.sh my-faq-bot us-east-1 "Do you offer delivery?"
 ```
+
+## 💬 Example Questions
+
+The chatbot can handle various ways of asking the same question:
+
+### **Store Hours**
+- "What time does the shop open?"
+- "When are you open?"
+- "What are your hours?"
+- "Are you open now?"
+- "What time do you close?"
+
+### **Contact Information**
+- "What are your contact details?"
+- "How can I reach you?"
+- "What's your phone number?"
+- "How do I contact support?"
+
+### **Delivery**
+- "Do you offer delivery?"
+- "Can you deliver to my address?"
+- "Is delivery free?"
+- "How much does shipping cost?"
+
+### **Payment**
+- "What payment methods do you accept?"
+- "Can I pay with credit card?"
+- "Do you take PayPal?"
+- "What forms of payment?"
+
+### **Returns**
+- "What is your return policy?"
+- "Can I return items?"
+- "How long do I have to return?"
+- "What's your refund policy?"
+
+**The AI understands natural language variations and provides consistent answers based on your FAQ content.**
 
 ### Option 3: API Integration
 Use the bot ID and alias ID from deployment outputs to integrate with:
