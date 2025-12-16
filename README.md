@@ -171,6 +171,25 @@ The deployment script automatically configures the test alias. If console testin
 4. **Scale up** by adding more intents
 5. **Integrate** with your existing systems
 
+## 🧹 Cleanup
+
+To delete all resources and avoid charges:
+
+### Option 1: AWS Console (Recommended)
+1. Go to **AWS CloudFormation Console**
+2. Select your stack (e.g., `my-faq-bot`)
+3. Click **"Delete"**
+4. Confirm deletion
+5. Wait for stack deletion to complete
+
+### Option 2: AWS CLI
+```bash
+# Replace with your stack name
+aws cloudformation delete-stack --stack-name my-faq-bot --region us-east-1
+```
+
+**Note:** This will delete all resources including S3 bucket, Lambda function, Lex bot, and IAM roles.
+
 ## 🆘 Support
 
 For issues or questions:
