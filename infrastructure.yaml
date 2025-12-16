@@ -1,0 +1,255 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Complete FAQ Chatbot Infrastructure'
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: 'faq-chatbot'
+    Description: 'S3 bucket name prefix for FAQ documents'
+
+Resources:
+  # S3 Bucket for FAQ documents
+  FAQBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketName}-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+
+  # Lambda Function
+  ChatbotLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'faq-chatbot-lambda'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref FAQBucket
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          bedrock = boto3.client('bedrock-runtime')
+          s3 = boto3.client('s3')
+
+          def lambda_handler(event, context):
+              logger.info(f"Event: {json.dumps(event)}")
+              
+              user_input = event['inputTranscript']
+              
+              try:
+                  # Get FAQ content from S3
+                  bucket_name = os.environ['S3_BUCKET']
+                  response = s3.get_object(Bucket=bucket_name, Key='faqs.txt')
+                  faq_content = response['Body'].read().decode('utf-8')
+                  
+                  # Create prompt with FAQ context
+                  prompt = f"""Based on the following FAQ information, please answer the user's question.
+
+          FAQ Information:
+          {faq_content}
+
+          User Question: {user_input}
+
+          Please provide a helpful answer based on the FAQ information. If the question is not covered in the FAQ, politely say so."""
+                  
+                  # Call Bedrock Claude 3
+                  body = json.dumps({
+                      "anthropic_version": "bedrock-2023-05-31",
+                      "max_tokens": 300,
+                      "messages": [
+                          {
+                              "role": "user",
+                              "content": prompt
+                          }
+                      ],
+                      "temperature": 0.1,
+                      "top_p": 0.9
+                  })
+                  
+                  response = bedrock.invoke_model(
+                      body=body,
+                      modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                      accept='application/json',
+                      contentType='application/json'
+                  )
+                  
+                  response_body = json.loads(response.get('body').read())
+                  answer = response_body.get('content', [{}])[0].get('text', '').strip()
+                  
+                  return {
+                      'sessionState': {
+                          'dialogAction': {
+                              'type': 'Close'
+                          },
+                          'intent': {
+                              'name': event.get('sessionState', {}).get('intent', {}).get('name', 'FAQIntent'),
+                              'state': 'Fulfilled'
+                          }
+                      },
+                      'messages': [
+                          {
+                              'contentType': 'PlainText',
+                              'content': answer
+                          }
+                      ]
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error: {str(e)}")
+                  return {
+                      'sessionState': {
+                          'dialogAction': {
+                              'type': 'Close'
+                          },
+                          'intent': {
+                              'name': event.get('sessionState', {}).get('intent', {}).get('name', 'FAQIntent'),
+                              'state': 'Failed'
+                          }
+                      },
+                      'messages': [
+                          {
+                              'contentType': 'PlainText',
+                              'content': 'Sorry, I encountered an error processing your request.'
+                          }
+                      ]
+                  }
+
+  # Lex Bot Role
+  LexBotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lexv2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LexLambdaInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt ChatbotLambda.Arn
+
+  # Lambda Permission for Lex
+  LexLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ChatbotLambda
+      Action: lambda:InvokeFunction
+      Principal: lexv2.amazonaws.com
+
+  # Lex Bot
+  FAQBot:
+    Type: AWS::Lex::Bot
+    Properties:
+      Name: 'FAQ-Chatbot'
+      Description: 'FAQ chatbot using Bedrock'
+      RoleArn: !GetAtt LexBotRole.Arn
+      DataPrivacy:
+        ChildDirected: false
+      IdleSessionTTLInSeconds: 300
+      BotLocales:
+        - LocaleId: 'en_US'
+          Description: 'English locale'
+          NluConfidenceThreshold: 0.40
+          VoiceSettings:
+            VoiceId: 'Joanna'
+          Intents:
+            - Name: 'FallbackIntent'
+              Description: 'Default fallback intent'
+              ParentIntentSignature: 'AMAZON.FallbackIntent'
+              FulfillmentCodeHook:
+                Enabled: true
+            - Name: 'FAQIntent'
+              Description: 'Handle FAQ questions'
+              SampleUtterances:
+                - Utterance: 'What time do you open'
+                - Utterance: 'When are you open'
+                - Utterance: 'What are your hours'
+                - Utterance: 'Tell me about your shop'
+              FulfillmentCodeHook:
+                Enabled: true
+
+  # Bot Version
+  BotVersion:
+    Type: AWS::Lex::BotVersion
+    Properties:
+      BotId: !Ref FAQBot
+      BotVersionLocaleSpecification:
+        - LocaleId: 'en_US'
+          BotVersionLocaleDetails:
+            SourceBotVersion: 'DRAFT'
+
+  # Bot Alias
+  BotAlias:
+    Type: AWS::Lex::BotAlias
+    Properties:
+      BotId: !Ref FAQBot
+      BotAliasName: 'live'
+      BotVersion: !GetAtt BotVersion.BotVersion
+      BotAliasLocaleSettings:
+        - LocaleId: 'en_US'
+          BotAliasLocaleSetting:
+            Enabled: true
+            CodeHookSpecification:
+              LambdaCodeHook:
+                LambdaArn: !GetAtt ChatbotLambda.Arn
+                CodeHookInterfaceVersion: '1.0'
+
+Outputs:
+  S3BucketName:
+    Description: 'S3 bucket for FAQ documents'
+    Value: !Ref FAQBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3Bucket'
+  
+  LambdaFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt ChatbotLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+  
+  BotId:
+    Description: 'Lex Bot ID'
+    Value: !Ref FAQBot
+    Export:
+      Name: !Sub '${AWS::StackName}-BotId'
+  
+  BotAliasId:
+    Description: 'Lex Bot Alias ID'
+    Value: !Ref BotAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-BotAliasId'
