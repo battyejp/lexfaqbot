@@ -13,7 +13,7 @@ User → Amazon Lex → Lambda Function → S3 (FAQ) + Bedrock Claude 3 → Resp
 - `infrastructure.yaml` - Complete CloudFormation template
 - `deploy.ps1` / `deploy.sh` - One-click deployment scripts (Windows/Linux)
 - `test.ps1` / `test.sh` - Testing scripts (Windows/Linux)
-- `faqs.txt` - FAQ knowledge base (customize this!)
+- `safer-gambling.pdf` - PDF knowledge base (replace with your content!)
 - `README.md` - This file
 
 ## 🚀 Quick Start
@@ -55,48 +55,47 @@ User → Amazon Lex → Lambda Function → S3 (FAQ) + Bedrock Claude 3 → Resp
 ### Option 2: Command Line
 ```bash
 # Windows
-.\test.ps1 -Message "What are your contact details?"
-.\test.ps1 -Message "Do you offer delivery?"
+.\test.ps1 -Message "What is safer gambling?"
+.\test.ps1 -Message "How can I set limits?"
 
 # Linux/Mac
-./test.sh my-faq-bot us-east-1 "What are your contact details?"
-./test.sh my-faq-bot us-east-1 "Do you offer delivery?"
+./test.sh my-faq-bot us-east-1 "What is safer gambling?"
+./test.sh my-faq-bot us-east-1 "Where can I get help?"
 ```
 
 ## 💬 Example Questions
 
 The chatbot can handle various ways of asking the same question:
 
-### **Store Hours**
-- "What time does the shop open?"
-- "When are you open?"
-- "What are your hours?"
-- "Are you open now?"
-- "What time do you close?"
+### **Safer Gambling Basics**
+- "What is safer gambling?"
+- "How can I gamble safely?"
+- "What does responsible gambling mean?"
+- "Tell me about safer gambling"
 
-### **Contact Information**
-- "What are your contact details?"
-- "How can I reach you?"
-- "What's your phone number?"
-- "How do I contact support?"
+### **Setting Limits**
+- "How can I set gambling limits?"
+- "What limits should I set?"
+- "How do I control my spending?"
+- "Can I set time limits?"
 
-### **Delivery**
-- "Do you offer delivery?"
-- "Can you deliver to my address?"
-- "Is delivery free?"
-- "How much does shipping cost?"
+### **Getting Help**
+- "Where can I get help for gambling problems?"
+- "What is the gambling helpline number?"
+- "How do I contact GamCare?"
+- "Where can I find support?"
 
-### **Payment**
-- "What payment methods do you accept?"
-- "Can I pay with credit card?"
-- "Do you take PayPal?"
-- "What forms of payment?"
+### **Warning Signs**
+- "What are the signs of problem gambling?"
+- "How do I know if I have a gambling problem?"
+- "What are the warning signs?"
+- "Am I gambling too much?"
 
-### **Returns**
-- "What is your return policy?"
-- "Can I return items?"
-- "How long do I have to return?"
-- "What's your refund policy?"
+### **Self-Exclusion**
+- "What is self-exclusion?"
+- "How do I self-exclude?"
+- "What is GamStop?"
+- "Can I ban myself from gambling?"
 
 **The AI understands natural language variations and provides consistent answers based on your FAQ content.**
 
@@ -109,12 +108,8 @@ Use the bot ID and alias ID from deployment outputs to integrate with:
 
 ## 📝 Customization
 
-### Add More FAQs
-Edit `faqs.txt` and redeploy:
-```
-Q6. What are your business hours?
-A6. We are open Monday to Friday 9 AM to 6 PM, and Saturday 10 AM to 4 PM.
-```
+### Update Knowledge Base
+Replace `safer-gambling.pdf` with your own PDF content and redeploy.
 
 ### Modify Bot Responses
 Update the Lambda function in `infrastructure.yaml` to:
@@ -165,7 +160,7 @@ The deployment script automatically configures the test alias. If console testin
 
 ## 📚 Next Steps
 
-1. **Add more FAQs** to `faqs.txt`
+1. **Update PDF content** in `safer-gambling.pdf`
 2. **Deploy to channels** (web widget, Slack, etc.)
 3. **Monitor usage** in CloudWatch
 4. **Scale up** by adding more intents

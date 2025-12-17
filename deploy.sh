@@ -28,9 +28,9 @@ BOT_ID=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="BotId") | .OutputValue
 BOT_ALIAS_ID=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="BotAliasId") | .OutputValue')
 LAMBDA_ARN=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="LambdaFunctionArn") | .OutputValue')
 
-# 3. Upload FAQ file
-echo "3. Uploading FAQ file..."
-aws s3 cp faqs.txt s3://$BUCKET_NAME/faqs.txt --region $REGION
+# 3. Upload PDF file
+echo "3. Uploading PDF file..."
+aws s3 cp safer-gambling.pdf s3://$BUCKET_NAME/safer-gambling.pdf --region $REGION
 
 # 4. Configure test bot alias
 echo "4. Configuring test bot alias..."

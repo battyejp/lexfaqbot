@@ -3,7 +3,7 @@
 # Test FAQ Chatbot
 STACK_NAME=${1:-"faq-chatbot"}
 REGION=${2:-"us-east-1"}
-MESSAGE=${3:-"What time does the shop open?"}
+MESSAGE=${3:-"What is the My Profit and Loss feature?"}
 
 echo "Testing FAQ Chatbot..."
 

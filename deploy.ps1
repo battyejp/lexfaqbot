@@ -27,9 +27,9 @@ $bucketName = ($outputs | Where-Object { $_.OutputKey -eq "S3BucketName" }).Outp
 $botId = ($outputs | Where-Object { $_.OutputKey -eq "BotId" }).OutputValue
 $botAliasId = ($outputs | Where-Object { $_.OutputKey -eq "BotAliasId" }).OutputValue
 
-# 3. Upload FAQ file
-Write-Host "3. Uploading FAQ file..." -ForegroundColor Yellow
-aws s3 cp faqs.txt s3://$bucketName/faqs.txt --region $Region
+# 3. Upload PDF file
+Write-Host "3. Uploading PDF file..." -ForegroundColor Yellow
+#aws s3 cp safer-gambling.pdf s3://$bucketName/safer-gambling.pdf --region $Region
 
 # 4. Configure test bot alias
 Write-Host "4. Configuring test bot alias..." -ForegroundColor Yellow

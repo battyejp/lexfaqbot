@@ -65,10 +65,19 @@ Resources:
               user_input = event['inputTranscript']
               
               try:
-                  # Get FAQ content from S3
+                  # Get PDF content from S3
+                  import PyPDF2
+                  import io
+                  
                   bucket_name = os.environ['S3_BUCKET']
-                  response = s3.get_object(Bucket=bucket_name, Key='faqs.txt')
-                  faq_content = response['Body'].read().decode('utf-8')
+                  response = s3.get_object(Bucket=bucket_name, Key='safer-gambling.pdf')
+                  pdf_content = response['Body'].read()
+                  
+                  # Extract text from PDF
+                  pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_content))
+                  faq_content = ""
+                  for page in pdf_reader.pages:
+                      faq_content += page.extract_text() + "\n"
                   
                   # Create prompt with FAQ context
                   prompt = f"""Based on the following FAQ information, please answer the user's question.
@@ -193,15 +202,7 @@ Resources:
               ParentIntentSignature: 'AMAZON.FallbackIntent'
               FulfillmentCodeHook:
                 Enabled: true
-            - Name: 'FAQIntent'
-              Description: 'Handle FAQ questions'
-              SampleUtterances:
-                - Utterance: 'What time do you open'
-                - Utterance: 'When are you open'
-                - Utterance: 'What are your hours'
-                - Utterance: 'Tell me about your shop'
-              FulfillmentCodeHook:
-                Enabled: true
+
 
   # Bot Version
   BotVersion:
