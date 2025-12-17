@@ -1,14 +1,15 @@
 # Test FAQ Chatbot
 param(
     [string]$StackName = "faq-chatbot",
-    [string]$Region = "us-east-1",
-    [string]$Message = "What is safer gambling?"
+    [string]$Region = "eu-west-1",
+    [string]$Message = "What is safer gambling?",
+    [string]$Profile = "new"
 )
 
 Write-Host "Testing FAQ Chatbot..." -ForegroundColor Green
 
 # Get bot details
-$outputs = aws cloudformation describe-stacks --stack-name $StackName --region $Region --query "Stacks[0].Outputs" --output json | ConvertFrom-Json
+$outputs = aws cloudformation describe-stacks --stack-name $StackName --region $Region --profile $Profile --query "Stacks[0].Outputs" --output json | ConvertFrom-Json
 $botId = ($outputs | Where-Object { $_.OutputKey -eq "BotId" }).OutputValue
 $botAliasId = ($outputs | Where-Object { $_.OutputKey -eq "BotAliasId" }).OutputValue.Split('|')[0]
 
@@ -22,6 +23,7 @@ $response = aws lexv2-runtime recognize-text `
     --session-id "test-$(Get-Date -Format 'yyyyMMddHHmmss')" `
     --text "$Message" `
     --region $Region `
+    --profile $Profile `
     --output json
 
 if ($LASTEXITCODE -eq 0) {

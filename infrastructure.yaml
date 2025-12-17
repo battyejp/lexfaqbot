@@ -1,60 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'FAQ Chatbot with Bedrock Knowledge Base'
+Description: 'FAQ Chatbot using existing Bedrock Knowledge Base'
 
 Parameters:
-  BucketName:
+  KnowledgeBaseId:
     Type: String
-    Default: 'faq-chatbot-kb'
-    Description: 'S3 bucket name prefix for FAQ documents'
+    Default: 'IQWBNRBAPW'
+    Description: 'Existing Bedrock Knowledge Base ID (create in console first)'
 
 Resources:
-  # S3 Bucket for FAQ documents
-  FAQBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${BucketName}-${AWS::AccountId}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  # OpenSearch Serverless Collection
-  KnowledgeBaseCollection:
-    Type: AWS::OpenSearchServerless::Collection
-    Properties:
-      Name: 'faq-kb-collection'
-      Type: VECTORSEARCH
-      Description: 'Vector collection for FAQ knowledge base'
-
-  # IAM Role for Bedrock Knowledge Base
-  BedrockKBRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: bedrock.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: BedrockKBPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt FAQBucket.Arn
-                  - !Sub '${FAQBucket.Arn}/*'
-              - Effect: Allow
-                Action:
-                  - aoss:APIAccessAll
-                Resource: !GetAtt KnowledgeBaseCollection.Arn
-
   # Lambda for Lex Integration
   LexLambda:
     Type: AWS::Lambda::Function
@@ -63,9 +16,10 @@ Resources:
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LexLambdaRole.Arn
+      Timeout: 30
       Environment:
         Variables:
-          KNOWLEDGE_BASE_ID: !Ref BedrockKnowledgeBase
+          KNOWLEDGE_BASE_ID: !Ref KnowledgeBaseId
       Code:
         ZipFile: |
           import json
@@ -158,40 +112,8 @@ Resources:
                 Action:
                   - bedrock:RetrieveAndGenerate
                   - bedrock:Retrieve
+                  - bedrock:InvokeModel
                 Resource: '*'
-
-  # Bedrock Knowledge Base
-  BedrockKnowledgeBase:
-    Type: AWS::Bedrock::KnowledgeBase
-    Properties:
-      Name: 'FAQ-Knowledge-Base'
-      Description: 'FAQ Knowledge Base for chatbot'
-      RoleArn: !GetAtt BedrockKBRole.Arn
-      KnowledgeBaseConfiguration:
-        Type: VECTOR
-        VectorKnowledgeBaseConfiguration:
-          EmbeddingModelArn: 'arn:aws:bedrock:eu-west-1::foundation-model/amazon.titan-embed-text-v1:0'
-      StorageConfiguration:
-        Type: OPENSEARCH_SERVERLESS
-        OpensearchServerlessConfiguration:
-          CollectionArn: !GetAtt KnowledgeBaseCollection.Arn
-          VectorIndexName: 'faq-index'
-          FieldMapping:
-            VectorField: 'vector'
-            TextField: 'text'
-            MetadataField: 'metadata'
-
-  # Data Source
-  BedrockDataSource:
-    Type: AWS::Bedrock::DataSource
-    Properties:
-      KnowledgeBaseId: !Ref BedrockKnowledgeBase
-      Name: 'FAQ-PDF-DataSource'
-      Description: 'PDF data source for FAQ documents'
-      DataSourceConfiguration:
-        Type: S3
-        S3Configuration:
-          BucketArn: !GetAtt FAQBucket.Arn
 
   # Lex Bot
   FAQBot:
@@ -213,6 +135,14 @@ Resources:
             - Name: 'FallbackIntent'
               Description: 'Default fallback intent'
               ParentIntentSignature: 'AMAZON.FallbackIntent'
+              FulfillmentCodeHook:
+                Enabled: true
+            - Name: 'FAQIntent'
+              Description: 'Handle FAQ questions'
+              SampleUtterances:
+                - Utterance: 'What is safer gambling'
+                - Utterance: 'How can I set limits'
+                - Utterance: 'Where can I get help'
               FulfillmentCodeHook:
                 Enabled: true
 
@@ -272,14 +202,6 @@ Resources:
                 CodeHookInterfaceVersion: '1.0'
 
 Outputs:
-  S3BucketName:
-    Description: 'S3 bucket for FAQ documents'
-    Value: !Ref FAQBucket
-  
-  KnowledgeBaseId:
-    Description: 'Bedrock Knowledge Base ID'
-    Value: !Ref BedrockKnowledgeBase
-  
   BotId:
     Description: 'Lex Bot ID'
     Value: !Ref FAQBot
@@ -287,3 +209,7 @@ Outputs:
   BotAliasId:
     Description: 'Lex Bot Alias ID'
     Value: !Ref BotAlias
+  
+  LambdaFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt LexLambda.Arn

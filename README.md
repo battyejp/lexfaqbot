@@ -32,16 +32,16 @@ User → Amazon Lex → Lambda Function → S3 (FAQ) + Bedrock Claude 3 → Resp
 .\deploy.ps1 -StackName "my-faq-bot" -Region "eu-west-1"
 
 # Linux/Mac Bash
-./deploy.sh my-faq-bot us-east-1
+./deploy.sh my-faq-bot eu-west-1
 ```
 
 ### 2. Test the Bot
 ```bash
 # Windows PowerShell
-.\test.ps1 -Message "What time does the shop open?"
+.\test.ps1 -Message "What is the My Profit and Loss feature?"
 
 # Linux/Mac Bash
-./test.sh my-faq-bot us-east-1 "What time does the shop open?"
+./test.sh my-faq-bot eu-west-1 "What is the My Profit and Loss feature?"
 ```
 
 ## 🧪 Testing Options
