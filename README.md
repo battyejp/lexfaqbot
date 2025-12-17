@@ -5,7 +5,7 @@ A complete serverless FAQ chatbot that uses Amazon Lex for conversation manageme
 ## 🏗️ Architecture
 
 ```
-User → Amazon Lex → Lambda Function → S3 (FAQ) + Bedrock Claude 3 → Response
+User → Amazon Lex → Lambda Function → Bedrock Knowledge Base + Claude 3 → Response
 ```
 
 ## 📁 Files
@@ -13,8 +13,28 @@ User → Amazon Lex → Lambda Function → S3 (FAQ) + Bedrock Claude 3 → Resp
 - `infrastructure.yaml` - Complete CloudFormation template
 - `deploy.ps1` / `deploy.sh` - One-click deployment scripts (Windows/Linux)
 - `test.ps1` / `test.sh` - Testing scripts (Windows/Linux)
-- `safer-gambling.pdf` - PDF knowledge base (replace with your content!)
+- `Safer Gambling - Questions & Answers.pdf` - PDF knowledge base (replace with your content!)
 - `README.md` - This file
+
+## 📋 Knowledge Base Setup
+
+**Before deploying the chatbot, you need to create a Bedrock Knowledge Base:**
+
+1. **Create S3 Bucket**
+   - Go to S3 Console and create a new bucket (e.g., `my-chatbot-knowledge`)
+   - Upload your PDF file (`Safer Gambling - Questions & Answers.pdf` or your own content)
+
+2. **Create Knowledge Base**
+   - Go to **Amazon Bedrock Console** → **Knowledge bases**
+   - Click **"Create knowledge base"**
+   - Choose **S3** as data source and select your bucket
+   - Select **Titan Text Embeddings v2** as embedding model
+   - Wait for ingestion to complete (5-10 minutes)
+   - **Copy the Knowledge Base ID** (you'll need this for deployment)
+
+3. **Update Deployment Script**
+   - Edit `deploy.ps1` or `deploy.sh`
+   - Replace `IQWBNRBAPW` with your Knowledge Base ID
 
 ## 🚀 Quick Start
 
@@ -24,43 +44,44 @@ User → Amazon Lex → Lambda Function → S3 (FAQ) + Bedrock Claude 3 → Resp
   - Configure: `aws configure`
 - **Windows**: PowerShell
 - **Linux/Mac**: Bash with `jq` installed (`sudo apt install jq` or `brew install jq`)
-- Access to Amazon Bedrock Claude 3 in your region
+- Access to Amazon Bedrock Claude 3 and Knowledge Base in your region
+- **Bedrock Knowledge Base** created with your PDF content (see Knowledge Base Setup above)
 
 ### 1. Deploy Everything
 ```bash
 # Windows PowerShell
-.\deploy.ps1 -StackName "my-faq-bot" -Region "eu-west-1"
+.\deploy.ps1
 
 # Linux/Mac Bash
-./deploy.sh my-faq-bot eu-west-1
+./deploy.sh
 ```
 
 ### 2. Test the Bot
 ```bash
 # Windows PowerShell
-.\test.ps1 -Message "What is the My Profit and Loss feature?"
+.\test.ps1 -StackName "faq-chatbot-simple" -Message "What is safer gambling?"
 
 # Linux/Mac Bash
-./test.sh my-faq-bot eu-west-1 "What is the My Profit and Loss feature?"
+./test.sh faq-chatbot-simple eu-west-1 "What is safer gambling?"
 ```
 
 ## 🧪 Testing Options
 
 ### Option 1: AWS Console (Recommended)
 1. Go to **Amazon Lex Console**
-2. Find bot: **FAQ-Chatbot**
+2. Find bot: **FAQ-Chatbot-KB**
 3. Click **"Test"** tab
-4. Type: "What time does the shop open?"
+4. Type: "What is safer gambling?"
 
 ### Option 2: Command Line
 ```bash
 # Windows
-.\test.ps1 -Message "What is safer gambling?"
-.\test.ps1 -Message "How can I set limits?"
+.\test.ps1 -StackName "faq-chatbot-simple" -Message "What is safer gambling?"
+.\test.ps1 -StackName "faq-chatbot-simple" -Message "How can I set limits?"
 
 # Linux/Mac
-./test.sh my-faq-bot us-east-1 "What is safer gambling?"
-./test.sh my-faq-bot us-east-1 "Where can I get help?"
+./test.sh faq-chatbot-simple eu-west-1 "What is safer gambling?"
+./test.sh faq-chatbot-simple eu-west-1 "Where can I get help?"
 ```
 
 ## 💬 Example Questions
@@ -108,8 +129,12 @@ Use the bot ID and alias ID from deployment outputs to integrate with:
 
 ## 📝 Customization
 
-### Update Knowledge Base
-Replace `safer-gambling.pdf` with your own PDF content and redeploy.
+### Update Knowledge Base Content
+1. **Upload new PDF** to your S3 bucket (replace existing file)
+2. **Sync Knowledge Base** in Bedrock Console:
+   - Go to Bedrock → Knowledge bases → Your KB
+   - Click **"Sync"** to ingest new content
+   - Wait for sync to complete
 
 ### Modify Bot Responses
 Update the Lambda function in `infrastructure.yaml` to:
@@ -137,13 +162,13 @@ Replace `anthropic.claude-3-sonnet-20240229-v1:0` with:
 
 ### Bot Not Responding
 1. Check Lambda logs in CloudWatch
-2. Verify S3 bucket has `faqs.txt`
+2. Verify Knowledge Base is active and synced
 3. Ensure Bedrock access in your region
 
 ### Permission Errors
 ```bash
 # Check if Bedrock is enabled
-aws bedrock list-foundation-models --region us-east-1
+aws bedrock list-foundation-models --region eu-west-1
 ```
 
 ### Test Alias Issues
@@ -160,7 +185,7 @@ The deployment script automatically configures the test alias. If console testin
 
 ## 📚 Next Steps
 
-1. **Update PDF content** in `safer-gambling.pdf`
+1. **Update PDF content** in Knowledge Base S3 bucket
 2. **Deploy to channels** (web widget, Slack, etc.)
 3. **Monitor usage** in CloudWatch
 4. **Scale up** by adding more intents
@@ -172,7 +197,7 @@ To delete all resources and avoid charges:
 
 ### Option 1: AWS Console (Recommended)
 1. Go to **AWS CloudFormation Console**
-2. Select your stack (e.g., `my-faq-bot`)
+2. Select your stack (e.g., `faq-chatbot-simple`)
 3. Click **"Delete"**
 4. Confirm deletion
 5. Wait for stack deletion to complete
@@ -180,10 +205,10 @@ To delete all resources and avoid charges:
 ### Option 2: AWS CLI
 ```bash
 # Replace with your stack name
-aws cloudformation delete-stack --stack-name my-faq-bot --region us-east-1
+aws cloudformation delete-stack --stack-name faq-chatbot-simple --region eu-west-1
 ```
 
-**Note:** This will delete all resources including S3 bucket, Lambda function, Lex bot, and IAM roles.
+**Note:** This will delete all resources including Lambda function, Lex bot, and IAM roles. The Knowledge Base is separate and won't be deleted.
 
 ## 🆘 Support
 
