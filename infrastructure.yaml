@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Complete FAQ Chatbot Infrastructure'
+Description: 'FAQ Chatbot with Bedrock Knowledge Base'
 
 Parameters:
   BucketName:
     Type: String
-    Default: 'faq-chatbot'
+    Default: 'faq-chatbot-kb'
     Description: 'S3 bucket name prefix for FAQ documents'
 
 Resources:
@@ -19,8 +19,16 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
-  # Lambda Execution Role
-  LambdaExecutionRole:
+  # OpenSearch Serverless Collection
+  KnowledgeBaseCollection:
+    Type: AWS::OpenSearchServerless::Collection
+    Properties:
+      Name: 'faq-kb-collection'
+      Type: VECTORSEARCH
+      Description: 'Vector collection for FAQ knowledge base'
+
+  # IAM Role for Bedrock Knowledge Base
+  BedrockKBRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -28,24 +36,36 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
+              Service: bedrock.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
-        - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+      Policies:
+        - PolicyName: BedrockKBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt FAQBucket.Arn
+                  - !Sub '${FAQBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - aoss:APIAccessAll
+                Resource: !GetAtt KnowledgeBaseCollection.Arn
 
-  # Lambda Function
-  ChatbotLambda:
+  # Lambda for Lex Integration
+  LexLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: 'faq-chatbot-lambda'
+      FunctionName: 'faq-lex-kb-lambda'
       Runtime: python3.11
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !GetAtt LexLambdaRole.Arn
       Environment:
         Variables:
-          S3_BUCKET: !Ref FAQBucket
+          KNOWLEDGE_BASE_ID: !Ref BedrockKnowledgeBase
       Code:
         ZipFile: |
           import json
@@ -56,62 +76,27 @@ Resources:
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
 
-          bedrock = boto3.client('bedrock-runtime')
-          s3 = boto3.client('s3')
+          bedrock_agent = boto3.client('bedrock-agent-runtime')
 
           def lambda_handler(event, context):
               logger.info(f"Event: {json.dumps(event)}")
               
               user_input = event['inputTranscript']
+              knowledge_base_id = os.environ['KNOWLEDGE_BASE_ID']
               
               try:
-                  # Get PDF content from S3
-                  import PyPDF2
-                  import io
-                  
-                  bucket_name = os.environ['S3_BUCKET']
-                  response = s3.get_object(Bucket=bucket_name, Key='safer-gambling.pdf')
-                  pdf_content = response['Body'].read()
-                  
-                  # Extract text from PDF
-                  pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_content))
-                  faq_content = ""
-                  for page in pdf_reader.pages:
-                      faq_content += page.extract_text() + "\n"
-                  
-                  # Create prompt with FAQ context
-                  prompt = f"""Based on the following FAQ information, please answer the user's question.
-
-          FAQ Information:
-          {faq_content}
-
-          User Question: {user_input}
-
-          Please provide a helpful answer based on the FAQ information. If the question is not covered in the FAQ, politely say so."""
-                  
-                  # Call Bedrock Claude 3
-                  body = json.dumps({
-                      "anthropic_version": "bedrock-2023-05-31",
-                      "max_tokens": 300,
-                      "messages": [
-                          {
-                              "role": "user",
-                              "content": prompt
+                  response = bedrock_agent.retrieve_and_generate(
+                      input={'text': user_input},
+                      retrieveAndGenerateConfiguration={
+                          'type': 'KNOWLEDGE_BASE',
+                          'knowledgeBaseConfiguration': {
+                              'knowledgeBaseId': knowledge_base_id,
+                              'modelArn': 'arn:aws:bedrock:eu-west-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
                           }
-                      ],
-                      "temperature": 0.1,
-                      "top_p": 0.9
-                  })
-                  
-                  response = bedrock.invoke_model(
-                      body=body,
-                      modelId='anthropic.claude-3-sonnet-20240229-v1:0',
-                      accept='application/json',
-                      contentType='application/json'
+                      }
                   )
                   
-                  response_body = json.loads(response.get('body').read())
-                  answer = response_body.get('content', [{}])[0].get('text', '').strip()
+                  answer = response['output']['text']
                   
                   return {
                       'sessionState': {
@@ -151,6 +136,86 @@ Resources:
                       ]
                   }
 
+  # Lambda Role
+  LexLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:RetrieveAndGenerate
+                  - bedrock:Retrieve
+                Resource: '*'
+
+  # Bedrock Knowledge Base
+  BedrockKnowledgeBase:
+    Type: AWS::Bedrock::KnowledgeBase
+    Properties:
+      Name: 'FAQ-Knowledge-Base'
+      Description: 'FAQ Knowledge Base for chatbot'
+      RoleArn: !GetAtt BedrockKBRole.Arn
+      KnowledgeBaseConfiguration:
+        Type: VECTOR
+        VectorKnowledgeBaseConfiguration:
+          EmbeddingModelArn: 'arn:aws:bedrock:eu-west-1::foundation-model/amazon.titan-embed-text-v1:0'
+      StorageConfiguration:
+        Type: OPENSEARCH_SERVERLESS
+        OpensearchServerlessConfiguration:
+          CollectionArn: !GetAtt KnowledgeBaseCollection.Arn
+          VectorIndexName: 'faq-index'
+          FieldMapping:
+            VectorField: 'vector'
+            TextField: 'text'
+            MetadataField: 'metadata'
+
+  # Data Source
+  BedrockDataSource:
+    Type: AWS::Bedrock::DataSource
+    Properties:
+      KnowledgeBaseId: !Ref BedrockKnowledgeBase
+      Name: 'FAQ-PDF-DataSource'
+      Description: 'PDF data source for FAQ documents'
+      DataSourceConfiguration:
+        Type: S3
+        S3Configuration:
+          BucketArn: !GetAtt FAQBucket.Arn
+
+  # Lex Bot
+  FAQBot:
+    Type: AWS::Lex::Bot
+    Properties:
+      Name: 'FAQ-Chatbot-KB'
+      Description: 'FAQ chatbot using Bedrock Knowledge Base'
+      RoleArn: !GetAtt LexBotRole.Arn
+      DataPrivacy:
+        ChildDirected: false
+      IdleSessionTTLInSeconds: 300
+      BotLocales:
+        - LocaleId: 'en_US'
+          Description: 'English locale'
+          NluConfidenceThreshold: 0.40
+          VoiceSettings:
+            VoiceId: 'Joanna'
+          Intents:
+            - Name: 'FallbackIntent'
+              Description: 'Default fallback intent'
+              ParentIntentSignature: 'AMAZON.FallbackIntent'
+              FulfillmentCodeHook:
+                Enabled: true
+
   # Lex Bot Role
   LexBotRole:
     Type: AWS::IAM::Role
@@ -170,39 +235,15 @@ Resources:
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
-                Resource: !GetAtt ChatbotLambda.Arn
+                Resource: !GetAtt LexLambda.Arn
 
   # Lambda Permission for Lex
   LexLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref ChatbotLambda
+      FunctionName: !Ref LexLambda
       Action: lambda:InvokeFunction
       Principal: lexv2.amazonaws.com
-
-  # Lex Bot
-  FAQBot:
-    Type: AWS::Lex::Bot
-    Properties:
-      Name: 'FAQ-Chatbot'
-      Description: 'FAQ chatbot using Bedrock'
-      RoleArn: !GetAtt LexBotRole.Arn
-      DataPrivacy:
-        ChildDirected: false
-      IdleSessionTTLInSeconds: 300
-      BotLocales:
-        - LocaleId: 'en_US'
-          Description: 'English locale'
-          NluConfidenceThreshold: 0.40
-          VoiceSettings:
-            VoiceId: 'Joanna'
-          Intents:
-            - Name: 'FallbackIntent'
-              Description: 'Default fallback intent'
-              ParentIntentSignature: 'AMAZON.FallbackIntent'
-              FulfillmentCodeHook:
-                Enabled: true
-
 
   # Bot Version
   BotVersion:
@@ -227,30 +268,22 @@ Resources:
             Enabled: true
             CodeHookSpecification:
               LambdaCodeHook:
-                LambdaArn: !GetAtt ChatbotLambda.Arn
+                LambdaArn: !GetAtt LexLambda.Arn
                 CodeHookInterfaceVersion: '1.0'
 
 Outputs:
   S3BucketName:
     Description: 'S3 bucket for FAQ documents'
     Value: !Ref FAQBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket'
   
-  LambdaFunctionArn:
-    Description: 'Lambda function ARN'
-    Value: !GetAtt ChatbotLambda.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-LambdaArn'
+  KnowledgeBaseId:
+    Description: 'Bedrock Knowledge Base ID'
+    Value: !Ref BedrockKnowledgeBase
   
   BotId:
     Description: 'Lex Bot ID'
     Value: !Ref FAQBot
-    Export:
-      Name: !Sub '${AWS::StackName}-BotId'
   
   BotAliasId:
     Description: 'Lex Bot Alias ID'
     Value: !Ref BotAlias
-    Export:
-      Name: !Sub '${AWS::StackName}-BotAliasId'

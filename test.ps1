@@ -2,7 +2,7 @@
 param(
     [string]$StackName = "faq-chatbot",
     [string]$Region = "us-east-1",
-    [string]$Message = "What is the My Profit and Loss feature?"
+    [string]$Message = "What is safer gambling?"
 )
 
 Write-Host "Testing FAQ Chatbot..." -ForegroundColor Green

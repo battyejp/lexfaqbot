@@ -29,7 +29,7 @@ $botAliasId = ($outputs | Where-Object { $_.OutputKey -eq "BotAliasId" }).Output
 
 # 3. Upload PDF file
 Write-Host "3. Uploading PDF file..." -ForegroundColor Yellow
-#aws s3 cp safer-gambling.pdf s3://$bucketName/safer-gambling.pdf --region $Region
+aws s3 cp safer-gambling.pdf s3://$bucketName/safer-gambling.pdf --region $Region
 
 # 4. Configure test bot alias
 Write-Host "4. Configuring test bot alias..." -ForegroundColor Yellow
